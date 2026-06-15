@@ -11,7 +11,8 @@ type MeData = { user: any; workspace: any; members: any[] };
 export function SettingsClient({ initial }: { initial: MeData }) {
   const [me, setMe] = useState(initial);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
-  const [selected, setSelected] = useState("");
+  const [selected, setSelected] = useState(initial.workspace?.spotify_playlist_id || "");
+  const [success, setSuccess] = useState("");
   const [invite, setInvite] = useState("");
   const [error, setError] = useState("");
   const isOwner = me.workspace?.role === "owner";
@@ -22,7 +23,22 @@ export function SettingsClient({ initial }: { initial: MeData }) {
     const playlist = playlists.find((p) => p.id === selected);
     if (!playlist) return;
     setError("");
-    try { await api("/api/workspace/setup", { method: "POST", body: JSON.stringify({ playlistId: playlist.id, name: playlist.name, imageUrl: playlist.imageUrl, ownerId: playlist.ownerId, workspaceName: "Playlist PR" }) }); await reload(); }
+    setSuccess("");
+    try {
+      await api("/api/workspace/setup", {
+        method: "POST",
+        body: JSON.stringify({
+          playlistId: playlist.id,
+          name: playlist.name,
+          imageUrl: playlist.imageUrl,
+          ownerId: playlist.ownerId,
+          collaborative: playlist.collaborative,
+          workspaceName: "Playlist PR"
+        })
+      });
+      await reload();
+      setSuccess("Playlist saved. You can now open the Playlist tab.");
+    }
     catch (err: any) { setError(err.message); }
   }
   async function createInvite() { setError(""); try { const data = await api<{ inviteUrl: string }>("/api/workspace/invite", { method: "POST" }); setInvite(data.inviteUrl); } catch (err: any) { setError(err.message); } }
@@ -32,6 +48,7 @@ export function SettingsClient({ initial }: { initial: MeData }) {
   return <div className="page">
     <div><p className="eyebrow">Workspace</p><h1>Settings</h1></div>
     {error ? <div className="error">{error}</div> : null}
+    {success ? <div className="success">{success}</div> : null}
     <Card><div className="row">
       {me.user?.avatar_url ? <img className="avatar" src={me.user.avatar_url} alt="" /> : <span className="avatar" />}
       <div><h2>{me.user?.display_name}</h2><p>Connected with Spotify</p></div>

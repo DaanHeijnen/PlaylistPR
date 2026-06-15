@@ -38,12 +38,14 @@ export async function GET(req: NextRequest) {
     `;
     const userId = rows[0].id;
     const existing = await sql`SELECT id FROM workspace_members WHERE user_id = ${userId} LIMIT 1`;
-    if (!existing[0]) {
+    const isNewWorkspace = !existing[0];
+    if (isNewWorkspace) {
       const workspace = await sql<{ id: string }[]>`INSERT INTO workspaces (name, created_by_user_id) VALUES ('Playlist PR', ${userId}) RETURNING id`;
       await sql`INSERT INTO workspace_members (workspace_id, user_id, role) VALUES (${workspace[0].id}, ${userId}, 'owner')`;
     }
     await createSession(userId);
-    return NextResponse.redirect(`${appUrl()}${nextPath && nextPath.startsWith("/") ? nextPath : "/"}`);
+    const fallbackPath = isNewWorkspace ? "/settings" : "/";
+    return NextResponse.redirect(`${appUrl()}${nextPath && nextPath.startsWith("/") ? nextPath : fallbackPath}`);
   } catch (err: any) {
     return NextResponse.redirect(`${appUrl()}/?error=${encodeURIComponent(err.message || "Spotify login failed")}`);
   }
