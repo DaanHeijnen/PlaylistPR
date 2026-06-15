@@ -58,6 +58,22 @@ export async function getUserAccessToken(userId: string) {
   return rows[0].expired ? refreshAccessToken(userId) : rows[0].access_token;
 }
 
+export async function spotifyFetchUrl(userId: string, url: string, init?: RequestInit) {
+  const token = await getUserAccessToken(userId);
+  const res = await fetch(url, {
+    ...init,
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(init?.headers || {}) }
+  });
+  if (res.status === 401) {
+    const nextToken = await refreshAccessToken(userId);
+    return fetch(url, {
+      ...init,
+      headers: { Authorization: `Bearer ${nextToken}`, "Content-Type": "application/json", ...(init?.headers || {}) }
+    });
+  }
+  return res;
+}
+
 export async function spotifyFetch(userId: string, path: string, init?: RequestInit) {
   const token = await getUserAccessToken(userId);
   const res = await fetch(`https://api.spotify.com/v1${path}`, {
