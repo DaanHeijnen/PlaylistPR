@@ -7,39 +7,62 @@ import { Modal } from "@/components/ui/Modal";
 import { api } from "@/lib/client-api";
 import type { SpotifyTrack } from "@/lib/types";
 
+type PlaylistTracksResponse = {
+  tracks: SpotifyTrack[];
+  playlistConfigured?: boolean;
+  needsSetup?: boolean;
+  message?: string;
+};
+
 export function PlaylistClient() {
   const [tracks, setTracks] = useState<SpotifyTrack[]>([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
+  const [needsSetup, setNeedsSetup] = useState(false);
   const [selected, setSelected] = useState<SpotifyTrack | null>(null);
   const [reason, setReason] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   async function load(query = q) {
-    setLoading(true); setError("");
-    try { const data = await api<{ tracks: SpotifyTrack[] }>(`/api/playlist/tracks?q=${encodeURIComponent(query)}`); setTracks(data.tracks); }
-    catch (err: any) { setError(err.message); }
-    finally { setLoading(false); }
+    setLoading(true);
+    setError("");
+    try {
+      const data = await api<PlaylistTracksResponse>(`/api/playlist/tracks?q=${encodeURIComponent(query)}`);
+      setTracks(data.tracks || []);
+      setNeedsSetup(Boolean(data.needsSetup));
+      if (data.message) setMessage(data.message);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   }
+
   useEffect(() => { load(""); }, []);
-  useEffect(() => { const t = setTimeout(() => load(q), 300); return () => clearTimeout(t); }, [q]);
+  useEffect(() => {
+    if (needsSetup) return;
+    const t = setTimeout(() => load(q), 300);
+    return () => clearTimeout(t);
+  }, [q]);
 
   async function requestRemoval() {
     if (!selected) return;
     setError("");
     try {
       await api("/api/requests", { method: "POST", body: JSON.stringify({ type: "remove", track: selected, reason }) });
-      setMessage("Removal request submitted."); setSelected(null); setReason("");
+      setMessage("Removal request submitted.");
+      setSelected(null);
+      setReason("");
     } catch (err: any) { setError(err.message); }
   }
 
   return <div className="page">
     <div className="page-header"><div><p className="eyebrow">Managed playlist</p><h1>Playlist</h1></div></div>
-    <SearchInput placeholder="Search playlist..." value={q} onChange={(e) => setQ(e.target.value)} />
+    {!needsSetup ? <SearchInput placeholder="Search playlist..." value={q} onChange={(e) => setQ(e.target.value)} /> : null}
     {message ? <div className="success">{message}</div> : null}
     {error ? <div className="error">{error}</div> : null}
-    {loading ? <p>Loading playlist...</p> : tracks.length === 0 ? <EmptyState title="No tracks found" description="Select a playlist in settings or try another search." icon="music_note" /> : <section className="stack">
+    {loading ? <p>Loading playlist...</p> : needsSetup ? <EmptyState title="No playlist selected" description="Go to Settings and choose the Spotify playlist you want to manage first." icon="settings" actionLabel="Open settings" onAction={() => { window.location.href = "/settings"; }} /> : tracks.length === 0 ? <EmptyState title="No tracks found" description="This playlist is empty or your search did not match any songs." icon="music_note" /> : <section className="stack">
       {tracks.map((track, index) => <article key={`${track.id}-${index}`} className="card track-row">
         <span className="muted" style={{ width: 22 }}>{index + 1}</span>
         {track.artworkUrl ? <img src={track.artworkUrl} className="art" alt="" /> : <div className="art" />}
